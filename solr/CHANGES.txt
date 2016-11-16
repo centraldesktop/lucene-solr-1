@@ -8,6 +8,8 @@ caching, replication, and a web administration interface.
 
 See http://lucene.apache.org/solr for more information.
 
+* SOLR-7264: Add DocValues support to BoolField. Booleans will be stored as a 1 or 0.
+ 
 
 Getting Started
 ---------------

@@ -17,11 +17,16 @@
 package org.apache.solr.schema;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.document.NumericDocValuesField;
+import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.LeafReaderContext;
@@ -31,6 +36,7 @@ import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.BoolDocValues;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.mutable.MutableValue;
@@ -144,7 +150,7 @@ public class BoolField extends PrimitiveFieldType {
 
   private static final CharsRef TRUE = new CharsRef("true");
   private static final CharsRef FALSE = new CharsRef("false");
-  
+
   @Override
   public CharsRef indexedToReadable(BytesRef input, CharsRefBuilder charsRef) {
     if (input.length > 0 && input.bytes[input.offset] == 'T') {
@@ -168,6 +174,38 @@ public class BoolField extends PrimitiveFieldType {
   @Override
   public Object unmarshalSortValue(Object value) {
     return unmarshalStringSortValue(value);
+  }
+
+  @Override
+  public List<IndexableField> createFields(SchemaField sf, Object value, float boost) {
+    if (sf.hasDocValues()) {
+      List<IndexableField> fields = new ArrayList<>();
+      final IndexableField field = createField(sf, value, boost);
+      fields.add(field);
+
+      if (sf.multiValued()) {
+        BytesRefBuilder bytes = new BytesRefBuilder();
+        readableToIndexed(value.toString(), bytes);
+        fields.add(new SortedSetDocValuesField(sf.getName(), bytes.get()));
+      } else {
+        final long bits;
+        Boolean boolValue = toObject(field);
+        if (boolValue != null && boolValue.equals(Boolean.TRUE)) {
+          bits = 1;
+        } else {
+          bits = 0;
+        }
+        fields.add(new NumericDocValuesField(sf.getName(), bits));
+      }
+
+      return fields;
+    } else {
+      return Collections.singletonList(createField(sf, value, boost));
+    }
+  }
+
+  @Override
+  public void checkSchemaField(final SchemaField field) {
   }
 }
 
